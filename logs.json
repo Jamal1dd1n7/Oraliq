@@ -1,0 +1,23 @@
+[
+    {
+        "timestamp": "2026-10-28 23:43:09",
+        "user_type": "Admin",
+        "first_name": "Jamoliddin",
+        "telegram_id": 5700003882,
+        "message": "/start"
+    },
+    {
+        "timestamp": "2026-10-28 23:43:24",
+        "user_type": "User",
+        "first_name": "Jamoliddin",
+        "telegram_id": 8654187469,
+        "message": "/start"
+    },
+    {
+        "timestamp": "2026-10-29 00:28:07",
+        "user_type": "User",
+        "first_name": "Jamoliddin",
+        "telegram_id": 8654187469,
+        "message": "/start"
+    }
+]
