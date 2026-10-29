@@ -12,7 +12,7 @@ TOKEN = os.getenv("TOKEN", "")
 ADMIN_TELEGRAM_ID = 5700003882
 
 DB_CONFIG = {
-    "dbname": "oraliq_imtihon",
+    "dbname": "oraliq_nazorat",
     "user": "postgres",
     "password": "just_mm08",
     "host": "localhost",

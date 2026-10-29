@@ -9,12 +9,11 @@ def get_connection():
         host=DB_CONFIG["host"],
         port=DB_CONFIG["port"]
     )
-
 def init_db():
     conn = get_connection()
     cur = conn.cursor()
     
-    # 1. Teachers
+    # 1. Teachers (O'qituvchilar)
     cur.execute("""
     CREATE TABLE IF NOT EXISTS teachers (
         id SERIAL PRIMARY KEY,
@@ -25,7 +24,7 @@ def init_db():
     );
     """)
 
-    # 2. Assistants
+    # 2. Assistants (Yordamchilar)
     cur.execute("""
     CREATE TABLE IF NOT EXISTS assistants (
         id SERIAL PRIMARY KEY,
@@ -35,17 +34,18 @@ def init_db():
     );
     """)
 
-    # 3. Teacher registration codes
+    # 3. Teacher registration codes (O'qituvchilarni ro'yxatdan o'tkazish kodlari - Yangi arxitektura)
     cur.execute("""
     CREATE TABLE IF NOT EXISTS teacher_codes (
         id SERIAL PRIMARY KEY,
+        first_name VARCHAR(100),
         telegram_id BIGINT,
         code VARCHAR(20) UNIQUE NOT NULL,
-        is_used BOOLEAN DEFAULT FALSE
+        status VARCHAR(20) DEFAULT 'yangi'
     );
     """)
 
-    # 4. Groups
+    # 4. Groups (Guruhlar)
     cur.execute("""
     CREATE TABLE IF NOT EXISTS groups (
         id SERIAL PRIMARY KEY,
@@ -54,16 +54,17 @@ def init_db():
     );
     """)
 
-    # 5. Students
+    # 5. Students (Talabalar)
     cur.execute("""
     CREATE TABLE IF NOT EXISTS students (
         id SERIAL PRIMARY KEY,
         group_id INT REFERENCES groups(id) ON DELETE CASCADE,
-        full_name VARCHAR(150) NOT NULL
+        full_name VARCHAR(150) NOT NULL,
+        telegram_id BIGINT UNIQUE
     );
     """)
 
-    # 6. Schedules
+    # 6. Schedules (Dars jadvali)
     cur.execute("""
     CREATE TABLE IF NOT EXISTS schedules (
         id SERIAL PRIMARY KEY,
@@ -75,7 +76,7 @@ def init_db():
     );
     """)
 
-    # 7. Exams
+    # 7. Exams (Imtihonlar)
     cur.execute("""
     CREATE TABLE IF NOT EXISTS exams (
         id SERIAL PRIMARY KEY,
@@ -86,7 +87,7 @@ def init_db():
     );
     """)
 
-    # 8. Exam Questions
+    # 8. Exam Questions (Imtihon savollari)
     cur.execute("""
     CREATE TABLE IF NOT EXISTS exam_questions (
         id SERIAL PRIMARY KEY,
@@ -96,7 +97,7 @@ def init_db():
     );
     """)
 
-    # 9. Exam Queue
+    # 9. Exam Queue (Imtihon navbati va jarayoni)
     cur.execute("""
     CREATE TABLE IF NOT EXISTS exam_queue (
         id SERIAL PRIMARY KEY,
@@ -115,7 +116,7 @@ def init_db():
     );
     """)
 
-    # 10. Exam Results
+    # 10. Exam Results (Imtihon natijalari)
     cur.execute("""
     CREATE TABLE IF NOT EXISTS exam_results (
         id SERIAL PRIMARY KEY,
@@ -138,3 +139,111 @@ def init_db():
     conn.commit()
     cur.close()
     conn.close()
+
+
+# --- YANGI ARXITEKTURA UCHUN DB FUNKSIYALARI ---
+
+def check_teacher_by_telegram_id(telegram_id):
+    """Telegram ID orqali teachers jadvalidan qidirish"""
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT id, full_name, username FROM teachers WHERE telegram_id = %s", (telegram_id,))
+        return cur.fetchone()
+    except Exception as e:
+        print(f"Xatolik check_teacher_by_telegram_id: {e}")
+        return None
+    finally:
+        cur.close()
+        conn.close()
+
+def add_pending_teacher(first_name, telegram_id, code):
+    """O'qituvchi ismini kiritganda teacher_codes ga 'yangi' statusi bilan yozish"""
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT id FROM teacher_codes WHERE telegram_id = %s", (telegram_id,))
+        existing = cur.fetchone()
+        
+        if existing:
+            cur.execute("""
+                UPDATE teacher_codes 
+                SET first_name = %s, code = %s, status = 'yangi' 
+                WHERE telegram_id = %s
+            """, (first_name, code, telegram_id))
+        else:
+            cur.execute("""
+                INSERT INTO teacher_codes (first_name, telegram_id, code, status)
+                VALUES (%s, %s, %s, 'yangi')
+            """, (first_name, telegram_id, code))
+            
+        conn.commit()
+        return True
+    except Exception as e:
+        conn.rollback()
+        print(f"Xatolik add_pending_teacher: {e}")
+        return False
+    finally:
+        cur.close()
+        conn.close()
+
+def get_pending_teacher_by_code(code):
+    """Admin kiritgan kod bo'yicha 'yangi' statusli o'qituvchini topish"""
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT id, first_name, telegram_id, code, status 
+            FROM teacher_codes 
+            WHERE code = %s AND status = 'yangi'
+        """, (code,))
+        return cur.fetchone()
+    except Exception as e:
+        print(f"Xatolik get_pending_teacher_by_code: {e}")
+        return None
+    finally:
+        cur.close()
+        conn.close()
+
+def complete_teacher_registration(telegram_id, full_name, username, password, code):
+    """Admin ma'lumotlarni kiritgach, teachers ga yozish va teacher_codes statusini 'tasdiqlangan' qilish"""
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            INSERT INTO teachers (full_name, username, password, telegram_id)
+            VALUES (%s, %s, %s, %s) RETURNING id
+        """, (full_name, username, password, telegram_id))
+        
+        row = cur.fetchone()
+        teacher_id = row[0] if row else None
+
+        cur.execute("""
+            UPDATE teacher_codes 
+            SET status = 'tasdiqlangan' 
+            WHERE code = %s
+        """, (code,))
+
+        conn.commit()
+        return teacher_id
+    except Exception as e:
+        conn.rollback()
+        print(f"Xatolik complete_teacher_registration: {e}")
+        return None
+    finally:
+        cur.close()
+        conn.close()
+
+def verify_teacher_login(username, password):
+    """Login va parol orqali o'qituvchini tekshirish"""
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT id, full_name FROM teachers WHERE username = %s AND password = %s", (username, password))
+        return cur.fetchone()
+    except Exception as e:
+        print(f"Xatolik verify_teacher_login: {e}")
+        return None
+    finally:
+        cur.close()
+        conn.close()

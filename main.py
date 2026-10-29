@@ -1,13 +1,14 @@
 import json
 import os
 from datetime import datetime
+
 from telebot import TeleBot
 from telebot.types import Message
 from database import init_db
-
+from keyboards import *
 from config import TOKEN, ADMIN_TELEGRAM_ID
-import config
-from headers.teacher import register_teacher_handlers      
+from headers.teacher import register_teacher_handlers     
+from headers.admin import register_admin_handlers 
 
 bot = TeleBot(TOKEN)
 
@@ -53,14 +54,14 @@ def start_handler(message: Message):
         log_msg = f"User: {message.chat.first_name} {message.chat.id}"
         print(log_msg)
         write_to_json_log("User", message.chat.first_name, message.chat.id, message.text)
-        bot.send_message(message.chat.id, "Salom! Bot ishga tushdi.")
+        bot.send_message(message.chat.id, "Salom! Bot ishga tushdi.", reply_markup=role_keyboard())
 
 def main():
     init_db()
     
     # register_student_handlers(bot)
     register_teacher_handlers(bot)
-    # register_admin_handlers(bot)
+    register_admin_handlers(bot)
 
     print("Bot muvaffaqiyatli ishga tushdi va ishlamoqda...")
     bot.infinity_polling()
