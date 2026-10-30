@@ -9,6 +9,7 @@ def get_connection():
         host=DB_CONFIG["host"],
         port=DB_CONFIG["port"]
     )
+
 def init_db():
     conn = get_connection()
     cur = conn.cursor()
@@ -141,10 +142,8 @@ def init_db():
     conn.close()
 
 
-# --- YANGI ARXITEKTURA UCHUN DB FUNKSIYALARI ---
-
+# --- O'QITUVCHI VA AUTENTIFIKASIYA FUNKSIYALARI ---
 def check_teacher_by_telegram_id(telegram_id):
-    """Telegram ID orqali teachers jadvalidan qidirish"""
     conn = get_connection()
     cur = conn.cursor()
     try:
@@ -158,7 +157,6 @@ def check_teacher_by_telegram_id(telegram_id):
         conn.close()
 
 def add_pending_teacher(first_name, telegram_id, code):
-    """O'qituvchi ismini kiritganda teacher_codes ga 'yangi' statusi bilan yozish"""
     conn = get_connection()
     cur = conn.cursor()
     try:
@@ -188,7 +186,6 @@ def add_pending_teacher(first_name, telegram_id, code):
         conn.close()
 
 def get_pending_teacher_by_code(code):
-    """Admin kiritgan kod bo'yicha 'yangi' statusli o'qituvchini topish"""
     conn = get_connection()
     cur = conn.cursor()
     try:
@@ -206,7 +203,6 @@ def get_pending_teacher_by_code(code):
         conn.close()
 
 def complete_teacher_registration(telegram_id, full_name, username, password, code):
-    """Admin ma'lumotlarni kiritgach, teachers ga yozish va teacher_codes statusini 'tasdiqlangan' qilish"""
     conn = get_connection()
     cur = conn.cursor()
     try:
@@ -235,7 +231,6 @@ def complete_teacher_registration(telegram_id, full_name, username, password, co
         conn.close()
 
 def verify_teacher_login(username, password):
-    """Login va parol orqali o'qituvchini tekshirish"""
     conn = get_connection()
     cur = conn.cursor()
     try:
@@ -247,3 +242,497 @@ def verify_teacher_login(username, password):
     finally:
         cur.close()
         conn.close()
+
+# --- IMTIHON VA SAVOLLAR FUNKSIYALARI ---
+def create_exam(teacher_telegram_id, title):
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT id FROM teachers WHERE telegram_id = %s", (teacher_telegram_id,))
+        t = cur.fetchone()
+        if not t:
+            return None
+        
+        cur.execute(
+            "INSERT INTO exams (teacher_id, title, status) VALUES (%s, %s, 'active') RETURNING id",
+            (t[0], title)
+        )
+        row = cur.fetchone()
+        conn.commit()
+        return row[0] if row else None
+    except Exception as e:
+        conn.rollback()
+        print(f"Xatolik create_exam: {e}")
+        return None
+    finally:
+        cur.close()
+        conn.close()
+
+def add_batch_questions(exam_id, questions_list):
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT COUNT(*) FROM exam_questions WHERE exam_id = %s", (exam_id,))
+        res = cur.fetchone()
+        current_count = res[0] if res else 0 
+        
+        inserted = 0
+        for q_text in questions_list:
+            if current_count + inserted >= 120:
+                break
+            inserted += 1
+            cur.execute(
+                "INSERT INTO exam_questions (exam_id, question_order, question_text) VALUES (%s, %s, %s)",
+                (exam_id, current_count + inserted, q_text.strip())
+            )
+        
+        conn.commit()
+        return current_count + inserted
+    except Exception as e:
+        conn.rollback()
+        print(f"Xatolik add_batch_questions: {e}")
+        return 0
+    finally:
+        cur.close()
+        conn.close()
+
+def get_teacher_exams(teacher_telegram_id):
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT e.id, e.title, e.status, COUNT(q.id) as question_count
+            FROM exams e
+            JOIN teachers t ON e.teacher_id = t.id
+            LEFT JOIN exam_questions q ON e.id = q.exam_id
+            WHERE t.telegram_id = %s
+            GROUP BY e.id, e.title, e.status
+            ORDER BY e.created_at DESC
+        """, (teacher_telegram_id,))
+        return cur.fetchall()
+    except Exception as e:
+        print(f"Xatolik get_teacher_exams: {e}")
+        return []
+    finally:
+        cur.close()
+        conn.close()
+
+def get_exam_question_count(exam_id):
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT COUNT(*) FROM exam_questions WHERE exam_id = %s", (exam_id,))
+        res = cur.fetchone()
+        return res[0] if res else 0
+    except Exception as e:
+        print(f"Xatolik get_exam_question_count: {e}")
+        return 0
+    finally:
+        cur.close()
+        conn.close()
+
+def get_exam_details(exam_id):
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT id, title, status FROM exams WHERE id = %s", (exam_id,))
+        return cur.fetchone()
+    except Exception as e:
+        print(f"Xatolik get_exam_details: {e}")
+        return None
+    finally:
+        cur.close()
+        conn.close()
+
+def get_exam_questions_paginated(exam_id, limit=10, offset=0):
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT id, question_order, question_text 
+            FROM exam_questions 
+            WHERE exam_id = %s 
+            ORDER BY question_order ASC 
+            LIMIT %s OFFSET %s
+        """, (exam_id, limit, offset))
+        return cur.fetchall()
+    except Exception as e:
+        print(f"Xatolik get_exam_questions_paginated: {e}")
+        return []
+    finally:
+        cur.close()
+        conn.close()
+
+def get_single_question(question_id):
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT id, question_order, question_text FROM exam_questions WHERE id = %s", (question_id,))
+        return cur.fetchone()
+    except Exception as e:
+        print(f"Xatolik get_single_question: {e}")
+        return None
+    finally:
+        cur.close()
+        conn.close()
+
+def update_question_text(question_id, new_text):
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("UPDATE exam_questions SET question_text = %s WHERE id = %s", (new_text, question_id))
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        print(f"Xatolik update_question_text: {e}")
+    finally:
+        cur.close()
+        conn.close()
+
+def get_exam_questions_list(exam_id):
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT id, question_text FROM exam_questions WHERE exam_id = %s", (exam_id,))
+        return cur.fetchall()
+    except Exception as e:
+        print(f"Xatolik get_exam_questions_list: {e}")
+        return []
+    finally:
+        cur.close()
+        conn.close()
+
+# --- GURUH VA TALABALAR FUNKSIYALARI ---
+def add_group(name):
+    """Yangi guruh yaratish va ID sini qaytarish"""
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("INSERT INTO groups (name) VALUES (%s) RETURNING id", (name,))
+        row = cur.fetchone()
+        conn.commit()
+        return row[0] if row else None
+    except Exception as e:
+        conn.rollback()
+        print(f"Xatolik add_group: {e}")
+        return None
+    finally:
+        cur.close()
+        conn.close()
+
+def add_batch_students(group_id, students_list):
+    """Guruhga talabalarni to'plam ko'rinishida qo'shish"""
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        inserted = 0
+        for student_name in students_list:
+            cur.execute("""
+                INSERT INTO students (group_id, full_name) 
+                VALUES (%s, %s)
+            """, (group_id, student_name))
+            inserted += 1
+            
+        conn.commit()
+        return inserted
+    except Exception as e:
+        conn.rollback()
+        print(f"Xatolik add_batch_students: {e}")
+        return 0
+    finally:
+        cur.close()
+        conn.close()
+
+def get_group_details(group_id):
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT id, name FROM groups WHERE id = %s", (group_id,))
+        g = cur.fetchone()
+        
+        cur.execute("SELECT COUNT(*) FROM students WHERE group_id = %s", (group_id,))
+        res = cur.fetchone()
+        count = res[0] if res else 0
+        
+        return g, count
+    except Exception as e:
+        print(f"Xatolik get_group_details: {e}")
+        return None, 0
+    finally:
+        cur.close()
+        conn.close()
+
+def get_group_students(group_id):
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT id, full_name FROM students WHERE group_id = %s ORDER BY id ASC", (group_id,))
+        return cur.fetchall()
+    except Exception as e:
+        print(f"Xatolik get_group_students: {e}")
+        return []
+    finally:
+        cur.close()
+        conn.close()
+
+def get_all_groups():
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT id, name FROM groups ORDER BY id ASC")
+        return cur.fetchall()
+    except Exception as e:
+        print(f"Xatolik get_all_groups: {e}")
+        return []
+    finally:
+        cur.close()
+        conn.close()
+    
+# --- IMTIHON NAVBATI VA NATIJALAR FUNKSIYALARI ---
+def start_exam_queue_batch(exam_id, group_id):
+    import random
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        students = get_group_students(group_id)
+        if not students:
+            return []
+        
+        all_questions = get_exam_questions_list(exam_id)
+        if len(all_questions) < 3:
+            return "not_enough_questions"
+        
+        first_five = students[:5]
+        queue_results = []
+        
+        for index, (student_id, student_name) in enumerate(first_five):
+            selected_qs = random.sample(all_questions, 3)
+            q_ids = [q[0] for q in selected_qs]
+            q_texts = "\n".join([f"{i+1}. {q[1]}" for i, q in enumerate(selected_qs)])
+            
+            access_code = f"ST-{random.randint(1000, 9999)}"
+            
+            cur.execute("""
+                INSERT INTO exam_queue (exam_id, group_id, student_id, student_full_name, access_code, assigned_question_ids, assigned_questions_text, queue_order, status)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'waiting')
+            """, (exam_id, group_id, student_id, student_name, access_code, q_ids, q_texts, index + 1))
+            
+            queue_results.append({
+                "name": student_name,
+                "code": access_code
+            })
+        
+        conn.commit()
+        return queue_results
+    except Exception as e:
+        conn.rollback()
+        print(f"Xatolik start_exam_queue_batch: {e}")
+        return []
+    finally:
+        cur.close()
+        conn.close()
+
+def get_queue_by_code(access_code):
+    """Kirish kodi bo'yicha navbatdagi talaba ma'lumotlarini olish"""
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT id, exam_id, group_id, student_id, student_full_name, 
+                   assigned_questions_text, is_ready, status, queue_order 
+            FROM exam_queue 
+            WHERE access_code = %s
+        """, (access_code,))
+        return cur.fetchone()
+    except Exception as e:
+        print(f"Xatolik get_queue_by_code: {e}")
+        return None
+    finally:
+        cur.close()
+        conn.close()
+
+def check_previous_student_finished(exam_id, group_id, current_queue_order):
+    """Joriy talabadan oldingi talaba imtihonni tugatganligini tekshirish"""
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT COUNT(*) FROM exam_queue 
+            WHERE exam_id = %s AND group_id = %s AND queue_order < %s AND status != 'finished'
+        """, (exam_id, group_id, current_queue_order))
+        row = cur.fetchone()
+        unfinished_count = row[0] if row else 0
+        return unfinished_count == 0  # Agar oldidagilarning hammasi finished bo'lsa True qaytaradi
+    except Exception as e:
+        print(f"Xatolik check_previous_student_finished: {e}")
+        return False
+    finally:
+        cur.close()
+        conn.close()
+
+def set_student_ready_status(queue_id):
+    """Talaba tayyor tugmasini bosganda statusni yangilash"""
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            UPDATE exam_queue 
+            SET is_ready = TRUE, status = 'ready', ready_timestamp = CURRENT_TIMESTAMP 
+            WHERE id = %s
+        """, (queue_id,))
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        print(f"Xatolik set_student_ready_status: {e}")
+    finally:
+        cur.close()
+        conn.close()
+
+def get_student_exam_result(exam_id, student_id):
+    """Imtihon tugagach talabaning natijasini olish"""
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT q1_text, q1_score, q2_text, q2_score, q3_text, q3_score, average_score, teacher_notes 
+            FROM exam_results 
+            WHERE exam_id = %s AND student_id = %s
+        """, (exam_id, student_id))
+        return cur.fetchone()
+    except Exception as e:
+        print(f"Xatolik get_student_exam_result: {e}")
+        return None
+    finally:
+        cur.close()
+        conn.close()
+
+def get_ready_students_for_teacher(teacher_telegram_id):
+    """O'qituvchining imtihoni uchun 'ready' statusidagi navbatdagi tayyor talabani olish"""
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT q.id, q.student_full_name, q.assigned_questions_text, q.exam_id, q.group_id, q.student_id
+            FROM exam_queue q
+            JOIN exams e ON q.exam_id = e.id
+            JOIN teachers t ON e.teacher_id = t.id
+            WHERE t.telegram_id = %s AND q.status = 'ready'
+            ORDER BY q.ready_timestamp ASC
+            LIMIT 1
+        """, (teacher_telegram_id,))
+        return cur.fetchone()
+    except Exception as e:
+        print(f"Xatolik get_ready_students_for_teacher: {e}")
+        return None
+    finally:
+        cur.close()
+        conn.close()
+
+def save_exam_result(exam_id, group_id, student_id, student_name, q1_text, q1_score, q2_text, q2_score, q3_text, q3_score):
+    """Talabaning imtihon natijalarini saqlash va o'rtacha ballni qaytarish"""
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        avg_score = round((q1_score + q2_score + q3_score) / 3.0, 2)
+        
+        cur.execute("""
+            INSERT INTO exam_results (exam_id, group_id, student_id, student_full_name, q1_text, q1_score, q2_text, q2_score, q3_text, q3_score, average_score)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (exam_id, group_id, student_id, student_name, q1_text, q1_score, q2_text, q2_score, q3_text, q3_score, avg_score))
+        
+        conn.commit()
+        return avg_score
+    except Exception as e:
+        conn.rollback()
+        print(f"Xatolik save_exam_result: {e}")
+        return 0.0
+    finally:
+        cur.close()
+        conn.close()
+
+def finish_queue_item(queue_id):
+    """Navbatdagi talaba imtihonni tugatgach statusini 'finished' qilish"""
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("UPDATE exam_queue SET status = 'finished' WHERE id = %s", (queue_id,))
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        print(f"Xatolik finish_queue_item: {e}")
+    finally:
+        cur.close()
+        conn.close()        
+
+def update_queue_student_telegram_id(queue_id, telegram_id):
+    """Talaba kodni kiritganda uning telegram_id sini navbatga yozib qo'yish"""
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("UPDATE exam_queue SET student_telegram_id = %s WHERE id = %s", (telegram_id, queue_id))
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        print(f"Xatolik update_queue_student_telegram_id: {e}")
+    finally:
+        cur.close()
+        conn.close()
+
+def add_next_student_to_queue(exam_id, group_id):
+    """Bitta talaba tugatgandan so'ng, guruhdagi keyingi talabani navbatga qo'shish"""
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        # 1. Guruhdagi barcha talabalarni olamiz
+        students = get_group_students(group_id)
+        if not students:
+            return None
+            
+        # 2. Bu imtihonda allaqachon navbatga qo'shilgan student_id larni topamiz
+        cur.execute("SELECT student_id FROM exam_queue WHERE exam_id = %s AND group_id = %s", (exam_id, group_id))
+        existing_student_ids = {row[0] for row in cur.fetchall()}
+        
+        # 3. Hali navbatga tushmagan birinchi talabani topamiz
+        next_student = None
+        for s_id, s_name in students:
+            if s_id not in existing_student_ids:
+                next_student = (s_id, s_name)
+                break
+                
+        if not next_student:
+            return None # Barcha talabalar imtihondan o'tgan
+            
+        student_id, student_name = next_student
+        
+        # 4. Eng oxirgi queue_order ni aniqlaymiz
+        cur.execute("SELECT MAX(queue_order) FROM exam_queue WHERE exam_id = %s AND group_id = %s", (exam_id, group_id))
+        row = cur.fetchone()
+        max_order = row[0] if row and row[0] is not None else 0
+        new_order = max_order + 1
+        
+        # 5. Savollardan 3 tasini tasodifiy tanlaymiz
+        all_questions = get_exam_questions_list(exam_id)
+        if len(all_questions) < 3:
+            return None
+            
+        import random
+        selected_qs = random.sample(all_questions, 3)
+        q_ids = [q[0] for q in selected_qs]
+        q_texts = "\n".join([f"{i+1}. {q[1]}" for i, q in enumerate(selected_qs)])
+        access_code = f"ST-{random.randint(1000, 9999)}"
+        
+        # 6. Yangi talabani navbatga yozamiz
+        cur.execute("""
+            INSERT INTO exam_queue (exam_id, group_id, student_id, student_full_name, access_code, assigned_question_ids, assigned_questions_text, queue_order, status)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'waiting')
+        """, (exam_id, group_id, student_id, student_name, access_code, q_ids, q_texts, new_order))
+        
+        conn.commit()
+        return {"name": student_name, "code": access_code}
+    except Exception as e:
+        conn.rollback()
+        print(f"Xatolik add_next_student_to_queue: {e}")
+        return None
+    finally:
+        cur.close()
+        conn.close()        

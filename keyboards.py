@@ -11,7 +11,7 @@ def days_inline_keyboard():
 
 def role_keyboard():
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
-    markup.add(types.KeyboardButton("👨‍🏫 O'qituvchi"), types.KeyboardButton("🎓 Talaba"))
+    markup.add(types.KeyboardButton("👨‍🏫 O'qituvchi"), types.KeyboardButton("Talaba"))
     return markup
 
 def teacher_main_menu():

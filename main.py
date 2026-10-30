@@ -9,6 +9,7 @@ from keyboards import *
 from config import TOKEN, ADMIN_TELEGRAM_ID
 from headers.teacher import register_teacher_handlers     
 from headers.admin import register_admin_handlers 
+from headers.student import register_student_handlers
 
 bot = TeleBot(TOKEN)
 
@@ -59,7 +60,7 @@ def start_handler(message: Message):
 def main():
     init_db()
     
-    # register_student_handlers(bot)
+    register_student_handlers(bot)
     register_teacher_handlers(bot)
     register_admin_handlers(bot)
 

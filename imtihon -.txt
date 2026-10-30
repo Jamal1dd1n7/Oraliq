@@ -1,0 +1,144 @@
+imtihon -> 
+i.j 				i.y. 				i.o
+imtihonlar jadvalida 
+olingan va olinmagan imtihonlar
+(olingan✅ ) -> imtihon ma'lumotlari, imtihon olish, tahrirlash
+(olinmagan X) -> imtihon ma'lumotlari, imtihon olish, tahrirlash
+
+
+imtihon yaratish 
+nomi 
+savollar 
+1.2.3.4.5. -30
+yana savol qo'shish 
+31-60
+yana savol qo'shish 
+60-90
+yana savol qo'shish
+90-120
+
+tayyor 
+
+imtihon olish 
+
+
+imtihon olish
+qaysi imtihon
+....
+qaysi guruh 
+.... yoki guruh qo'shish
+guruh nomini
+...
+talabalar ma'lumotlari
+1) F.I
+tayyor 
+imtihon olish 
+imtihon boshlash 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+1) Xolmatov Jamoliddin
+2) Yakubov Javohir
+3) Ahmadjonov Abdulloh
+4) .......
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+O'qituvchi uchun menu:
+1) Dars jadvali
+2) Imitihon 
+3) Imtihon natijalari
+4) Sozlamalar
+
+Dars jadvali bo'limi keyin qo'shiladi.
+
+Imtihon bo'limida:
+1) Imtihon jadvali
+2) Olingan imtihonlar
+3) Imtihon yaratish
+
+1) Imtihon jadvali - barcha imtihonlar chiqariladi "SELECT * FROM Exams;" 
+Bo'limda Olingan imtihonlari va olinmagan imtihonlar
+(olingan✅ ) "SELECT * FROM Exams WHERE status='non_active';"
+(olinmagan X) "SELECT * FROM Exams WHERE status='active';"
+shunday ko'rinishida chiqariladi.
+Olingan imtihon ichiga kirilganda ichida z-> imtihon ma'lumotlari, imtihon olish, tahrirlash bo'limlari joylashadi
+Olinmagan imtihon ichiga kirilganda ichida z-> imtihon ma'lumotlari, imtihon olish, tahrirlash bo'limlari joylashadi
+
+Olingan imtihon ichidagi imtihon ma'lumotlari, imtihon olish, tahrirlash tugmalari joylashadi va ular:
+1) Imtihon ma'lumotlari - imtihon natijalari, qaysi guruh, qaysi talaba va ularning natijalari haqida kichik ma'lumot beriladi 
+va ostida talabalar tugmasi joylashadi va u bo'limda barcha talabalar 10 tadan bitta messageda chiqariladi va message ostida har bir talabaning tartib raqami uchun tugma chiqariladi. Agar 10 tadan keyingi talabalarni ko'rish kerak bo'lsa keyingi tugmasi bosiladi, ortga qaytish uchun ortga tugmasi bosiladi. 
+Agar birorta talaba tanlansa, o'sha imtihon uchun talabaning natijalari chiqariladi.
+
+
+
+Imtihon olish arxitekturasi:
+1) imtihon olish funksiyasi ishlatilganda bot DB dan status = "active" imtihonlar ro'yxati chiqariladi.
+Imtihon tanlangach, guruhlar ro'yxati chiqariladi. "SELECT * FROM groups;"
+Guruhlar tanlash bo'limida, imtihon olinishi kerak bo'lgan guruh bo'lmasa guruh qo'shish tugmasi chiqariladi.
+Guruh qo'shish funksiyasi:
+1) Guruh nomi kiritiladi;
+2) Guruh ro'yxat ko'rinishda botga yuboriladi.
+Misol uchun:
+1) Xolmatov Jamoliddin
+2) Yakubov Javohir
+3) ... ...
+
+Guruh ro'yxatda bo'lsa tanlanadi.
+Guruh tanlansa, imtihonnin boshlash bo'limiga o'tiladi. 
+Bo'limda, qaysi imtihon, qaysi guruhligi ko'rsatiladi va imtihon savollari har beshta talaba uchun 3 tadan takrorlanmaydigan savollar kartasi ko'rinishida chiqariladi. 
+Talaba imtihon savollarini olishi uchun avval talaba navbati kelgan bo'lishi,undan olingi talabaga o'qituvchi tomonidan imtihon natijasi qo'yilgan bo'lishi kerak va o'qituvchi tomonidan talaba uchun botdan kod olinishi kerak. Imtihon boshida o'qituvchi 5 ta talaba uchun ro'yxat bo'yicha kod oladi. Olingan kod bilan talaba o'zi uchun tayyorlanga savollarni ko'radi. Talaba savollarni olishi bilan 10 daqiqalik taymer ishga tushadi va 10 daqiqa ichida talaba tayyorman tugmasini bosmasa imtihondan yeqiladi, bossa o'qituvchiga "shu raqamli talaba imtihon topshirish uchun tayyor" deb imtihon olish tugmasi chiqariladi. Talaba imtihonni topshirgach, o'qituvchi talabaning bahosini va izoh kiritishi kerak. Imtihon natijasi kiritilgach keying talabaga o'tganda avvalgi talabaga natijalari ko'rsatiladi. Imtihon olish tugmasi bosilganda, bot keyin 5 talik uchun kod tayyorlaydi va navbatdagi talaba imtihon savollarini oladi. Imtihon oxirida, imtihon natijasi chiqariladi.
+
+Bizda bundan avvalgi funksiyalar yaxshi ishlayapti. Yozganim bo'yicha reja tuz va biz yana davom etamiz.
+
+
+Endi biz talaba uchun to'liq arxitekturani qayta yozib  chiqishimiz kerak. 
+
+Talaba uchun arxitektura:
+Talaba botga start beradi. Botdan o'z ro'lini tanlaydi. Botga o'qituvchi bergan kodni kiritadi. Bot unga 3 ta takrorlanmaydigan savollarni beradi. Tayyor bo'lganda tayyorman tugmasini bosadi. Agar undan oldingi talaba hali imtihonni topshirib tugatmagan bo'lsa, talabga tayyorlanib olishi uchun vaqt beriladi. Undan oldingi talaba tayyor bo'lgach talabaga "Imtihon topshirishingiz mumkin" degan xabar yuboriladi. Talaba imtihonni topshirib bo'lgach, imtihon natijalari talabaga yuboriladi. 
+
+
+
+
